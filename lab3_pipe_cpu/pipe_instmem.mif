@@ -1,0 +1,86 @@
+DEPTH = 128;          % Memory depth and width are required %
+WIDTH = 32;           % Enter a decimal number %
+ADDRESS_RADIX = HEX;  % Address and value radixes are optional %
+DATA_RADIX = HEX;     % Enter BIN, DEC, HEX, or OCT; unless %
+                      % otherwise specified, radixes = HEX %
+CONTENT
+BEGIN
+[0..7F] : 00000000;   % Range--Every address from 0 to 7F = 00000000 %
+
+ 0 : 0800003a;        % (000) start:      j main_loop             # enter main loop, delay slot underneath                       %
+ 1 : 3c070000;        % (004)             lui $7, 0               # $7 stores op (0->add (default), 1->sub, 2->xor)              %
+ 2 : 001ef080;        % (008) sevenseg:   sll $30, $30, 2         # calculate sevenseg table item addr to load                   %
+ 3 : 03e00008;        % (00c)             jr $ra                  # return, delay slot underneath                                %
+ 4 : 8fdd0000;        % (010)             lw $29, 0($30)          # load sevenseg code of arg($30) from data memory to $29       %
+ 5 : 0000e820;        % (014) split:      add $29, $0, $0         # $29 stores tens digit                                        %
+ 6 : 23defff6;        % (018) split_loop: addi $30, $30, -10      # decrement arg($30) by 10                                     %
+ 7 : 001ee7c3;        % (01c)             sra $28, $30, 31        # extend sign digit of the result                              %
+ 8 : 17800003;        % (020)             bne $28, $0, split_done # if $30 has become negative, goto split_done                  %
+ 9 : 00000020;        % (024)             add $0, $0, $0          # nop padding                                                  %
+ A : 08000006;        % (028)             j split_loop            # continue loop, delay slot underneath                         %
+ B : 23bd0001;        % (02c)             addi $29, $29, 1        # increment tens digit                                         %
+ C : 03e00008;        % (030) split_done: jr $ra                  # return, delay slot underneath                                %
+ D : 23dc000a;        % (034)             addi $28, $30, 10       # get units digit and store to $28                             %
+ E : 03e0a020;        % (038) show:       add $20, $31, $0        # store return address to $20                                  %
+ F : 001dd140;        % (03c)             sll $26, $29, 5         # $26 = 32 * $29(arg2, pos)                                    %
+10 : 0c000005;        % (040)             jal split               # call split (passing $30, arg1, value), delay slot underneath %
+11 : 235aff20;        % (044)             addi $26, $26, 0xff20   # calculate sevenseg pair base addr and store to $26           %
+12 : 0c000002;        % (048)             jal sevenseg            # call split (passing $30), delay slot underneath              %
+13 : 03a0f020;        % (04c)             add $30, $29, $0        # move $29(returned tens digit) to $30                         %
+14 : af5d0010;        % (050)             sw $29, 16($26)         # show sevenseg tens digit                                     %
+15 : 0c000002;        % (054)             jal sevenseg            # call split (passing $30), delay slot underneath              %
+16 : 0380f020;        % (058)             add $30, $28, $0        # move $28(returned units digit) to $30                        %
+17 : af5d0000;        % (05c)             sw $29, 0($26)          # show sevenseg units digit                                    %
+18 : 0280f820;        % (060)             add $31, $20, $0        # restore return address                                       %
+19 : 03e00008;        % (064)             jr $ra                  # return                                                       %
+1A : 8c05ff10;        % (068) get_op:     lw $5, 65296($0)        # load state of keys to $5                                     %
+1B : 2006ffff;        % (06c)             addi $6, $0, -1         # store 32'bffffffff to $6                                     %
+1C : 00a62826;        % (070)             xor $5, $5, $6          # $5 = ~$5                                                     %
+1D : 30a60008;        % (074)             andi $6, $5, 0x8        # get state of key3                                            %
+1E : 14c00008;        % (078)             bne $6, $0, add_op      # if key3 is pressed, change op to add                         %
+1F : 00000020;        % (07c)             add $0, $0, $0          # nop padding                                                  %
+20 : 30a60004;        % (080)             andi $6, $5, 0x4        # get state of key2                                            %
+21 : 14c00006;        % (084)             bne $6, $0, sub_op      # if key2 is pressed, change op to sub                         %
+22 : 00000020;        % (088)             add $0, $0, $0          # nop padding                                                  %
+23 : 30a60002;        % (08c)             andi $6, $5, 0x2        # get state of key1                                            %
+24 : 14c00004;        % (090)             bne $6, $0, xor_op      # if key1 is pressed, change op to xor                         %
+25 : 00000020;        % (094)             add $0, $0, $0          # nop padding                                                  %
+26 : 03e00008;        % (098)             jr $ra                  # no key pressed, no op change, return                         %
+27 : 20c6fffb;        % (09c) add_op:     addi $6, $6, -5         # calculate new opcode                                         %
+28 : 20c6fffd;        % (0a0) sub_op:     addi $6, $6, -3         # calculate new opcode                                         %
+29 : 03e00008;        % (0a4) xor_op:     jr $ra                  # return, delay slot underneath                                %
+2A : 00c03820;        % (0a8)             add $7, $6, $0          # calculate new opcode and store to $7                         %
+2B : 14e00003;        % (0ac) do_op:      bne $7, $0, not_add     # check if op is add                                           %
+2C : 00000020;        % (0b0)             add $0, $0, $0          # nop padding                                                  %
+2D : 03e00008;        % (0b4)             jr $ra                  # return, delay slot underneath                                %
+2E : 00432020;        % (0b8)             add $4, $2, $3          # do add                                                       %
+2F : 20e8ffff;        % (0bc) not_add:    addi $8, $7, -1         # check if op is sub                                           %
+30 : 15000007;        % (0c0)             bne $8, $0, not_sub     # check if op is sub                                           %
+31 : 00432022;        % (0c4)             sub $4, $2, $3          # do sub                                                       %
+32 : 00042fc3;        % (0c8)             sra $5, $4, 31          # extend sign digit of the result                              %
+33 : 10a00002;        % (0cc)             beq $5, $0, sub_done    # result is positive, done                                     %
+34 : 00000020;        % (0d0)             add $0, $0, $0          # nop padding                                                  %
+35 : 00042022;        % (0d4)             sub $4, $0, $4          # result = -result (get abs of result)                         %
+36 : 03e00008;        % (0d8) sub_done:   jr $ra                  # return                                                       %
+37 : 00000020;        % (0dc)             add $0, $0, $0          # nop padding                                                  %
+38 : 03e00008;        % (0e0) not_sub:    jr $ra                  # return, delay slot underneath                                %
+39 : 00432026;        % (0e4)             xor $4, $2, $3          # do xor                                                       %
+3A : 8c01ff00;        % (0e8) main_loop:  lw $1, 65280($0)        # load state of switches to $1                                 %
+3B : ac01ff80;        % (0ec)             sw $1, 65408($0)        # store $1 to state of leds                                    %
+3C : 302203e0;        % (0f0)             andi $2, $1, 0x3e0      # calculate value1 and store to $2                             %
+3D : 0c00001a;        % (0f4)             jal get_op              # call get_op, delay slot underneath                           %
+3E : 00011142;        % (0f8)             srl $2, $1, 5           # calculate value1 and store to $2                             %
+3F : 0c00002b;        % (0fc)             jal do_op               # call do_op (passing $2 and $3), delay slot underneath        %
+40 : 3023001f;        % (100)             andi $3, $1, 0x1f       # calculate value2 and store to $3                             %
+41 : 0080f020;        % (104)             add $30, $4, $0         # move $4(result) to $30                                       %
+42 : 0c00000e;        % (108)             jal show                # call show (passing $30 and $29), delay slot underneath       %
+43 : 201d0000;        % (10c)             addi $29, $0, 0         # set pos to 0 (right pair)                                    %
+44 : 0040f020;        % (110)             add $30, $2, $0         # move $2(value1) to $30                                       %
+45 : 0c00000e;        % (114)             jal show                # call show (passing $30 and $29), delay slot underneath       %
+46 : 201d0002;        % (118)             addi $29, $0, 2         # set pos to 2 (left pair)                                     %
+47 : 0060f020;        % (11c)             add $30, $3, $0         # move $3(value2) to $30                                       %
+48 : 0c00000e;        % (120)             jal show                # call show (passing $30 and $29), delay slot underneath       %
+49 : 201d0001;        % (124)             addi $29, $0, 1         # set pos to 1 (middle pair)                                   %
+4A : 0800003a;        % (128)             j main_loop             # loop forever                                                 %
+4B : 00000020;        % (12c)             add $0, $0, $0          # nop padding                                                  %
+END ;
